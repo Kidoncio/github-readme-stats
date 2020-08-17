@@ -8,9 +8,12 @@ const fetcher = (variables, token) => {
       query: `
       query userInfo($login: String!) {
         user(login: $login) {
-          # fetch only owner repos & not forks
-          repositories(ownerAffiliations: OWNER, isFork: false, first: 100, orderBy: {field: STARGAZERS, direction: DESC}) {
+          repositories(ownerAffiliations: OWNER, isFork: false, first: 100, orderBy: {field: UPDATED_AT, direction: DESC}) {
             nodes {
+              primaryLanguage {
+                name
+                color
+              }
               languages(first: 100, orderBy: {field: SIZE, direction: DESC}) {
                 edges {
                   size
@@ -49,24 +52,31 @@ async function fetchTopLanguages(username) {
     .filter((node) => {
       return node.languages.edges.length > 0;
     })
-    // flatten the list of language nodes
-    .reduce((acc, curr) => curr.languages.edges.concat(acc), [])
-    .sort((a, b) => b.size - a.size)
     .reduce((acc, prev) => {
       // get the size of the language (bytes)
-      let langSize = prev.size;
+      const primaryLanguageName = prev.primaryLanguage.name;
+
+      let edgePrimaryLanguage = prev.languages.edges.filter((edge) => {
+        return edge.node.name === primaryLanguageName;
+      })[0];
+
+      let langSize = edgePrimaryLanguage.size;
 
       // if we already have the language in the accumulator
       // & the current language name is same as previous name
       // add the size to the language size.
-      if (acc[prev.node.name] && prev.node.name === acc[prev.node.name].name) {
-        langSize = prev.size + acc[prev.node.name].size;
+      if (
+        acc[primaryLanguageName] &&
+        primaryLanguageName === acc[primaryLanguageName].name
+      ) {
+        langSize = edgePrimaryLanguage.size + acc[primaryLanguageName].size;
       }
+
       return {
         ...acc,
-        [prev.node.name]: {
-          name: prev.node.name,
-          color: prev.node.color,
+        [primaryLanguageName]: {
+          name: primaryLanguageName,
+          color: edgePrimaryLanguage.node.color,
           size: langSize,
         },
       };
